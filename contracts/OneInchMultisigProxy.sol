@@ -3,8 +3,8 @@ pragma solidity >=0.4.25 <0.7.0;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
-import "@chainlink/contracts/src/v0.5/interfaces/AggregatorV3Interface.sol";
-import "./IOneSplit.sol";
+import "@chainlink/contracts/src/v0.6/interfaces/AggregatorV3Interface.sol";
+import "./UniswapV2Router02.sol";
 
 contract OneInchMultisigProxy {
   using SafeMath for uint256;
@@ -17,25 +17,24 @@ contract OneInchMultisigProxy {
     uint256 minReturnAmount;
     uint256 maxGasAmount;
     uint256 expiration;
-    address payable owner;
+    address payable beneficiary;
     State state;
   }
 
-  IOneSplit public oneSplit;
+  IUniswapV2Router02 public uniswap;
   AggregatorV3Interface public priceProvider;
 
   Transaction[] public transactions;
-  uint256 public _returnAmount;
-  uint256 public _gas;
+  uint public _returnAmount;
 
   event Create(uint256 indexed id, address fromToken, address destToken, uint256 amount, uint256 expiration);
 
   constructor(
-    address _oneSplitAddress,
-    address _priceProviderAddress
+    address _uniswapRouterAddr,
+    address _priceProviderAddr
   ) public {
-    oneSplit = IOneSplit(_oneSplitAddress);
-    priceProvider = AggregatorV3Interface(_priceProviderAddress);
+    uniswap = IUniswapV2Router02(_uniswapRouterAddr);
+    priceProvider = AggregatorV3Interface(_priceProviderAddr);
 	}
 
   function create(
@@ -72,37 +71,19 @@ contract OneInchMultisigProxy {
     require(transaction.state == State.Pending, "Transaction: Can execute only pending transactions");
     require(transaction.expiration >= block.timestamp, "Transaction: Cannot execute an expired transaction");
 
-    (uint256 expectedReturn, uint256[] memory distribution) = oneSplit.getExpectedReturn(
-      transaction.fromToken,
-      transaction.destToken,
-      transaction.amount,
-      10,
-      0
-    );
+    address[] memory path = new address[](2);
+    path[0] = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+    path[1] = address(transaction.destToken);
+    uint[] memory minOuts = uniswap.getAmountsOut(transaction.amount, path);
+    _returnAmount = minOuts[1];
 
-    (,int256 answer,,,) = priceProvider.latestRoundData();
-    uint256 latestGasPrice = uint256(answer);
-    //(uint256 returnAmount, uint256 estimateGasAmount, uint256[] memory distribution) = oneSplit
-      //.getExpectedReturnWithGas(
-        //transaction.fromToken,
-        //transaction.destToken,
-        //transaction.amount,
-        //10,
-        //0,
-        //expectedReturn.mul(latestGasPrice)
-      //);
-    uint256 returnAmount = oneSplit.swap.value(transaction.amount)(
-      transaction.fromToken,
-      transaction.destToken,
-      transaction.amount,
-      0,
-      distribution,
-      0
+    uniswap.swapExactETHForTokens { value: transaction.amount }(
+      minOuts[1],
+      path,
+      transaction.beneficiary,
+      transaction.expiration
     );
-    _returnAmount = returnAmount;
   }
-
-  //_execute();
 
   function refund(uint256 transactionId) external {
     Transaction storage transaction = transactions[transactionId];
