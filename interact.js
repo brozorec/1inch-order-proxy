@@ -44,7 +44,7 @@ async function main() {
   const accounts = await web3.eth.getAccounts();
   await createTx({ amount: 1, minReturn: 500, fromAccount: accounts[0] });
 
-  const { id } = await createTx({ amount: 1, minReturn: 500, fromAccount: accounts[0] });
+  const { id } = await createTx({ amount: 2, minReturn: 500, fromAccount: accounts[0] });
   console.log(id.toString());
 
   await executeTx({ id, fromAccount: accounts[0] }) ;

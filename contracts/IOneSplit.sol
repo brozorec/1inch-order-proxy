@@ -1,4 +1,4 @@
-pragma solidity ^0.5.0;
+pragma solidity >=0.4.25 <0.7.0;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -103,7 +103,7 @@ contract IOneSplitConsts {
 }
 
 
-contract IOneSplit is IOneSplitConsts {
+interface IOneSplit {
     function getExpectedReturn(
         IERC20 fromToken,
         IERC20 destToken,
@@ -111,7 +111,7 @@ contract IOneSplit is IOneSplitConsts {
         uint256 parts,
         uint256 flags // See constants in IOneSplit.sol
     )
-        public
+        external
         view
         returns(
             uint256 returnAmount,
@@ -126,7 +126,7 @@ contract IOneSplit is IOneSplitConsts {
         uint256 flags, // See constants in IOneSplit.sol
         uint256 destTokenEthPriceTimesGasPrice
     )
-        public
+        external
         view
         returns(
             uint256 returnAmount,
@@ -139,24 +139,24 @@ contract IOneSplit is IOneSplitConsts {
         IERC20 destToken,
         uint256 amount,
         uint256 minReturn,
-        uint256[] memory distribution,
+        uint256[] calldata distribution,
         uint256 flags
     )
-        public
+        external
         payable
         returns(uint256 returnAmount);
 }
 
 
-contract IOneSplitMulti is IOneSplit {
+interface IOneSplitMulti is IOneSplit {
     function getExpectedReturnWithGasMulti(
-        IERC20[] memory tokens,
+        IERC20[] calldata tokens,
         uint256 amount,
-        uint256[] memory parts,
-        uint256[] memory flags,
-        uint256[] memory destTokenEthPriceTimesGasPrices
+        uint256[] calldata parts,
+        uint256[] calldata flags,
+        uint256[] calldata destTokenEthPriceTimesGasPrices
     )
-        public
+        external
         view
         returns(
             uint256[] memory returnAmounts,
@@ -165,13 +165,13 @@ contract IOneSplitMulti is IOneSplit {
         );
 
     function swapMulti(
-        IERC20[] memory tokens,
+        IERC20[] calldata tokens,
         uint256 amount,
         uint256 minReturn,
-        uint256[] memory distribution,
-        uint256[] memory flags
+        uint256[] calldata distribution,
+        uint256[] calldata flags
     )
-        public
+        external
         payable
         returns(uint256 returnAmount);
 }

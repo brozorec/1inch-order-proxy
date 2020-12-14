@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.4.25 <0.7.0;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+//import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@chainlink/contracts/src/v0.5/interfaces/AggregatorV3Interface.sol";
 import "./IOneSplit.sol";
@@ -91,7 +91,7 @@ contract OneInchMultisigProxy {
         //0,
         //expectedReturn.mul(latestGasPrice)
       //);
-    uint256 returnAmount = oneSplit.swap.value(transaction.amount)(
+    uint256 returnAmount = oneSplit.swap{ value: transaction.amount }(
       transaction.fromToken,
       transaction.destToken,
       transaction.amount,
