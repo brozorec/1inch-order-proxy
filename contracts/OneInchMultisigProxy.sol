@@ -1,57 +1,10 @@
 // SPDX-License-Identifier: MIT
+
 pragma solidity >=0.4.25 <0.7.0;
 pragma experimental ABIEncoderV2;
 
-import "@chainlink/contracts/src/v0.6/interfaces/AggregatorV3Interface.sol";
 import "./UniERC20.sol";
-
-interface IChi is IERC20 {
-  function mint(uint256 value) external;
-  function free(uint256 value) external returns (uint256 freed);
-  function freeFromUpTo(address from, uint256 value) external returns (uint256 freed);
-}
-
-interface ISafeERC20Extension {
-  function safeApprove(IERC20 token, address spender, uint256 amount) external;
-  function safeTransfer(IERC20 token, address payable target, uint256 amount) external;
-}
-
-interface IGasDiscountExtension {
-  function calculateGas(uint256 gasUsed, uint256 flags, uint256 calldataLength) external pure returns (IChi, uint256);
-}
-
-interface IOneInchCaller is ISafeERC20Extension, IGasDiscountExtension {
-  struct CallDescription {
-    uint256 targetWithMandatory;
-    uint256 gasLimit;
-    uint256 value;
-    bytes data;
-  }
-
-  function makeCall(CallDescription memory desc) external;
-  function makeCalls(CallDescription[] memory desc) external payable;
-}
-
-interface IOneInchExchange {
-  struct SwapDescription {
-    IERC20 srcToken;
-    IERC20 dstToken;
-    address srcReceiver;
-    address dstReceiver;
-    uint256 amount;
-    uint256 minReturnAmount;
-    uint256 guaranteedAmount;
-    uint256 flags;
-    address referrer;
-    bytes permit;
-  }
-
-  function swap(
-    IOneInchCaller caller,
-    SwapDescription calldata desc,
-    IOneInchCaller.CallDescription[] calldata calls
-  ) external payable returns (uint256);
-}
+import "./IOneInchExchange.sol";
 
 contract OneInchMultisigProxy {
   using SafeMath for uint256;
@@ -59,7 +12,7 @@ contract OneInchMultisigProxy {
   using UniERC20 for IERC20;
 
   enum State { Pending, Fulfilled, Refunded }
-  struct Transaction {
+  struct Order {
     IERC20 srcToken;
     IERC20 dstToken;
     uint256 srcAmount;
@@ -70,32 +23,38 @@ contract OneInchMultisigProxy {
     State state;
   }
 
-  AggregatorV3Interface public priceProvider;
+  IOneInchExchange public oneInchExchange;
 
-  Transaction[] public transactions;
+  Order[] public orders;
 
   event Create(uint256 indexed id, address srcToken, address dstToken, uint256 srcAmount, uint256 execReward, uint256 minReturnAmount, uint256 expiration);
   event Update(uint256 indexed id, uint256 minReturnAmount, uint256 expiration);
   event Execute(uint256 indexed id);
   event Refund(uint256 indexed id);
 
-  address ONE_INCH_ADDRESS = 0x111111125434b319222CdBf8C261674aDB56F3ae;
   address public _dstReceiver;
   uint256 public _guaranteedAmount;
   uint256 public _minReturnAmount;
 
   constructor(
-    address _priceProviderAddr
+    address _oneInchAddr
   ) public {
-    priceProvider = AggregatorV3Interface(_priceProviderAddr);
+    oneInchExchange = IOneInchExchange(_oneInchAddr);
 	}
 
   /**
+   * @dev - Create an order to be executed on OneInch before expiration.
+   * If `srcTokenAddr` is ETH, `srcAmount` has to be included in msg.value.
+   * If `srcTokenAddr` isn't ETH, make sure that msg.sender has approved 
+   * to spend `srcTokenAddr` in `srcAmount` amount.
+   * In both cases, one should provide additional ETH in msg.value that
+   * would serve as a reward for the one who calls `execute(orderId,calldata)`.
+   *
    * @param srcTokenAddr - address of token to swap from
    * @param dstTokenAddr - address of token to swap to
-   * @param srcAmount - amount of srcToken passed with 1e18 decimals
-   * @param minReturnAmount - TODO
-   * @param period - period in seconds after which transaction cannot be executed
+   * @param srcAmount - amount of srcToken in minimal divisible units
+   * @param minReturnAmount - min number of dstToken to be received
+   * @param period - period in seconds after which order cannot be executed
    */
   function create(
     address srcTokenAddr,
@@ -105,7 +64,7 @@ contract OneInchMultisigProxy {
     uint256 period
   ) external payable {
     uint256 expiration = block.timestamp + period;
-    require(expiration > block.timestamp, "Transaction: Expiration is before current datetime");
+    require(expiration > block.timestamp, "Order: Expiration is before current datetime");
 
     IERC20 srcToken = IERC20(srcTokenAddr);
     IERC20 dstToken = IERC20(dstTokenAddr);
@@ -118,10 +77,10 @@ contract OneInchMultisigProxy {
 
     if (!srcToken.isETH()) {
       srcToken.safeTransferFrom(msg.sender, address(this), srcAmount);
-      srcToken.uniApprove(ONE_INCH_ADDRESS, srcAmount);
+      srcToken.uniApprove(address(oneInchExchange), srcAmount);
     }
 
-    Transaction memory transaction = Transaction(
+    Order memory order = Order(
       srcToken,
       dstToken,
       srcAmount,
@@ -131,85 +90,103 @@ contract OneInchMultisigProxy {
       msg.sender,
       State.Pending
     );
-    uint256 transactionId = transactions.length;
-    transactions.push(transaction);
+    uint256 orderId = orders.length;
+    orders.push(order);
 
-    emit Create(transactionId, srcTokenAddr, dstTokenAddr, srcAmount, execReward, minReturnAmount, expiration);
+    emit Create(orderId, srcTokenAddr, dstTokenAddr, srcAmount, execReward, minReturnAmount, expiration);
   }
 
+  /**
+   * @dev - Update `minReturnAmount` and `expiration` of an existing order.
+   *
+   * @param minReturnAmount - min number of dstToken to be received
+   * @param period - period in seconds after which order cannot be executed
+   */
   function update(
-    uint256 transactionId,
+    uint256 orderId,
     uint256 minReturnAmount,
     uint256 period
   ) external {
     uint256 expiration = block.timestamp + period;
-    require(expiration > block.timestamp, "Transaction: Expiration is before current datetime");
+    require(expiration > block.timestamp, "Order: Expiration is before current datetime");
 
-    Transaction storage transaction = transactions[transactionId];
+    Order storage order = orders[orderId];
 
-    require(transaction.state == State.Pending, "Transaction: Can update only pending transactions");
-    require(msg.sender == transaction.beneficiary, "Wrong msg.sender");
+    require(order.state == State.Pending, "Order: Can update only pending orders");
+    require(msg.sender == order.beneficiary, "Wrong msg.sender");
     
-    transaction.minReturnAmount = minReturnAmount;
-    transaction.expiration = expiration;
+    order.minReturnAmount = minReturnAmount;
+    order.expiration = expiration;
 
-    emit Update(transactionId, transaction.minReturnAmount, transaction.expiration);
+    emit Update(orderId, order.minReturnAmount, order.expiration);
   }
 
-  function execute(uint256 transactionId, bytes calldata oneInchCallData) external {
-    Transaction storage transaction = transactions[transactionId];
+  /**
+   * @dev - Execute order. On successful execution, msg.sender gets
+   * `execReward` provided by order's `beneficiary`.
+   *
+   * @param orderId - id of order
+   * @param oneInchCallData - data obtained from "/swap" endpoint of 1inch API
+   */
+  function execute(uint256 orderId, bytes calldata oneInchCallData) external {
+    Order storage order = orders[orderId];
 
     require(
-      transaction.state == State.Pending,
-      "Transaction: Can execute only pending transactions"
+      order.state == State.Pending,
+      "Order: Can execute only pending orders"
     );
     require(
-      transaction.expiration >= block.timestamp,
-      "Transaction: Cannot execute an expired transaction"
+      order.expiration >= block.timestamp,
+      "Order: Cannot execute an expired order"
     );
 
     (IOneInchCaller caller, IOneInchExchange.SwapDescription memory desc, IOneInchCaller.CallDescription[] memory calls) = abi
       .decode(oneInchCallData[4:], (IOneInchCaller, IOneInchExchange.SwapDescription, IOneInchCaller.CallDescription[]));
 
     require(
-      desc.guaranteedAmount >= transaction.minReturnAmount,
-      "desc.guaranteedAmount is less than transaction.minReturnAmount"
+      desc.guaranteedAmount >= order.minReturnAmount,
+      "desc.guaranteedAmount is less than order.minReturnAmount"
     );
 
     require(
-      address(desc.srcToken) == address(transaction.srcToken) &&
-      address(desc.dstToken) == address(transaction.dstToken) &&
-      desc.dstReceiver == transaction.beneficiary,
+      address(desc.srcToken) == address(order.srcToken) &&
+      address(desc.dstToken) == address(order.dstToken) &&
+      desc.dstReceiver == order.beneficiary,
       "Calldata is not correct"
     );
 
-    uint256 msgValue = transaction.srcToken.isETH() ? transaction.srcAmount : 0;
+    uint256 msgValue = order.srcToken.isETH() ? order.srcAmount : 0;
 
-    uint256 returnAmount = IOneInchExchange(ONE_INCH_ADDRESS).swap{ value: msgValue }(caller, desc, calls);
+    uint256 returnAmount = oneInchExchange.swap{ value: msgValue }(caller, desc, calls);
 
-    require(returnAmount >= transaction.minReturnAmount, "returnAmount is less than transaction.minReturnAmount");
-    transaction.state = State.Fulfilled;
+    require(returnAmount >= order.minReturnAmount, "returnAmount is less than order.minReturnAmount");
+    order.state = State.Fulfilled;
 
-    msg.sender.transfer(transaction.execReward);
-    emit Execute(transactionId);
+    msg.sender.transfer(order.execReward);
+    emit Execute(orderId);
   }
 
-  function refund(uint256 transactionId) external {
-    Transaction storage transaction = transactions[transactionId];
+  /**
+   * @dev - Refund order's `beneficiary`.
+   *
+   * @param orderId - id of order
+   */
+  function refund(uint256 orderId) external {
+    Order storage order = orders[orderId];
 
-    require(transaction.state == State.Pending, "Transaction: Can refund only pending transactions");
-    require(msg.sender == transaction.beneficiary, "Wrong msg.sender");
+    require(order.state == State.Pending, "Order: Can refund only pending orders");
+    require(msg.sender == order.beneficiary, "Wrong msg.sender");
 
-    if (transaction.srcToken.isETH()) {
-      transaction.srcToken.uniTransfer(msg.sender, transaction.srcAmount.add(transaction.execReward));
+    if (order.srcToken.isETH()) {
+      order.srcToken.uniTransfer(msg.sender, order.srcAmount.add(order.execReward));
     }
     else {
-      transaction.srcToken.uniTransfer(msg.sender, transaction.srcAmount);
-      msg.sender.transfer(transaction.execReward);
+      order.srcToken.uniTransfer(msg.sender, order.srcAmount);
+      msg.sender.transfer(order.execReward);
     }
 
-    transaction.state = State.Refunded;
-    emit Refund(transactionId);
+    order.state = State.Refunded;
+    emit Refund(orderId);
   }
 
   function _decode_(bytes calldata oneInchCallData) external {
