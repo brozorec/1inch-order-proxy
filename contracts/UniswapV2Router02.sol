@@ -2,7 +2,7 @@
  *Submitted for verification at Etherscan.io on 2020-06-05
 */
 
-pragma solidity =0.6.6;
+pragma solidity ^0.6.6;
 
 interface IUniswapV2Router01 {
     function factory() external pure returns (address);

@@ -1,20 +1,74 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.4.25 <0.7.0;
+pragma experimental ABIEncoderV2;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+//import "@openzeppelin/contracts/token/ERC20/IERC20Detailed.sol";
+//import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@chainlink/contracts/src/v0.6/interfaces/AggregatorV3Interface.sol";
 import "./UniswapV2Router02.sol";
+import "./IERC20Detailed.sol";
+import "./UniERC20.sol";
+import "./RevertReasonParser.sol";
+
+interface IChi is IERC20 {
+  function mint(uint256 value) external;
+  function free(uint256 value) external returns (uint256 freed);
+  function freeFromUpTo(address from, uint256 value) external returns (uint256 freed);
+}
+
+interface ISafeERC20Extension {
+  function safeApprove(IERC20 token, address spender, uint256 amount) external;
+  function safeTransfer(IERC20 token, address payable target, uint256 amount) external;
+}
+
+interface IGasDiscountExtension {
+  function calculateGas(uint256 gasUsed, uint256 flags, uint256 calldataLength) external pure returns (IChi, uint256);
+}
+
+interface IOneInchCaller is ISafeERC20Extension, IGasDiscountExtension {
+  struct CallDescription {
+    uint256 targetWithMandatory;
+    uint256 gasLimit;
+    uint256 value;
+    bytes data;
+  }
+
+  function makeCall(CallDescription memory desc) external;
+  function makeCalls(CallDescription[] memory desc) external payable;
+}
+
+interface IOneInchExchange {
+  struct SwapDescription {
+    IERC20 srcToken;
+    IERC20 dstToken;
+    address srcReceiver;
+    address dstReceiver;
+    uint256 amount;
+    uint256 minReturnAmount;
+    uint256 guaranteedAmount;
+    uint256 flags;
+    address referrer;
+    bytes permit;
+  }
+
+  function swap(
+    IOneInchCaller caller,
+    SwapDescription calldata desc,
+    IOneInchCaller.CallDescription[] calldata calls
+  ) external payable returns (uint256);
+}
 
 contract OneInchMultisigProxy {
   using SafeMath for uint256;
+  using SafeERC20 for IERC20Detailed;
+  using UniERC20 for IERC20Detailed;
 
   enum State { Pending, Fulfilled }
   struct Transaction {
-    IERC20 fromToken;
-    IERC20 destToken;
-    uint256 amount;
-    uint256 minReturnAmount;
+    IERC20Detailed srcToken;
+    IERC20Detailed dstToken;
+    uint256 srcAmount;
+    uint256 minDstAmount;
     uint256 maxGasAmount;
     uint256 expiration;
     address payable beneficiary;
@@ -25,9 +79,11 @@ contract OneInchMultisigProxy {
   AggregatorV3Interface public priceProvider;
 
   Transaction[] public transactions;
-  uint public _returnAmount;
 
-  event Create(uint256 indexed id, address fromToken, address destToken, uint256 amount, uint256 expiration);
+  event Create(uint256 indexed id, address srcToken, address dstToken, uint256 srcAmount, uint256 expiration);
+
+  address ONE_INCH_ADDRESS = 0x111111125434b319222CdBf8C261674aDB56F3ae;
+  address public _dstReceiver;
 
   constructor(
     address _uniswapRouterAddr,
@@ -37,23 +93,42 @@ contract OneInchMultisigProxy {
     priceProvider = AggregatorV3Interface(_priceProviderAddr);
 	}
 
+  /**
+   * @param srcToken - address of token to swap from
+   * @param dstToken - address of token to swap to
+   * @param srcAmount - amount of srcToken passed with 1e18 decimals
+   * @param minDstAmount - TODO
+   * @param period - period in seconds after which transaction cannot be executed
+   */
   function create(
-    address fromToken,
-    address destToken,
-    uint256 minReturnAmount,
-    uint256 maxGasAmount,
+    address srcToken,
+    address dstToken,
+    uint256 srcAmount,
+    uint256 minDstAmount,
     uint256 period
   ) external payable {
     uint256 expiration = block.timestamp + period;
     require(expiration > block.timestamp, "Transaction: Expiration is before current datetime");
 
-    uint256 amount = msg.value;
+    IERC20Detailed _srcToken = IERC20Detailed(srcToken);
+    IERC20Detailed _dstToken = IERC20Detailed(dstToken);
+
+    require(
+      msg.value > (_srcToken.isETH() ? srcAmount : 0),
+      "Tx impossible: Not enough funds to pay for gas"
+    );
+    uint256 maxGasAmount = _srcToken.isETH() ? msg.value.sub(srcAmount) : msg.value;
+
+    if (!_srcToken.isETH()) {
+      _srcToken.safeTransferFrom(msg.sender, address(this), srcAmount);
+      _srcToken.safeApprove(ONE_INCH_ADDRESS, srcAmount);
+    }
 
     Transaction memory transaction = Transaction(
-      IERC20(fromToken),
-      IERC20(destToken),
-      amount,
-      minReturnAmount,
+      _srcToken,
+      _dstToken,
+      srcAmount,
+      minDstAmount,
       maxGasAmount,
       expiration,
       msg.sender,
@@ -62,27 +137,46 @@ contract OneInchMultisigProxy {
     uint256 transactionId = transactions.length;
     transactions.push(transaction);
 
-    emit Create(transactionId, fromToken, destToken, amount, expiration);
+    emit Create(transactionId, srcToken, dstToken, srcAmount, expiration);
   }
 
-  function execute(uint256 transactionId) external {
+  //function execute(uint256 transactionId, bytes calldata oneInchCallData) external {
+    //Transaction storage transaction = transactions[transactionId];
+
+    //require(
+      //transaction.state == State.Pending,
+      //"Transaction: Can execute only pending transactions"
+    //);
+    //require(
+      //transaction.expiration >= block.timestamp,
+      //"Transaction: Cannot execute an expired transaction"
+    //);
+
+    //uint256 msgValue = transaction.srcToken.isETH() ? transaction.srcAmount : 0;
+
+    //(bool success, bytes memory result) = address(ONE_INCH_ADDRESS)
+      //.call{ value: msgValue }(oneInchCallData);
+
+    //if (!success) {
+      //revert(RevertReasonParser.parse(result, "OneInchCaller callBytes failed: "));
+    //}
+  //}
+
+  function execute(uint256 transactionId, bytes calldata oneInchCallData) external {
     Transaction storage transaction = transactions[transactionId];
 
-    require(transaction.state == State.Pending, "Transaction: Can execute only pending transactions");
-    require(transaction.expiration >= block.timestamp, "Transaction: Cannot execute an expired transaction");
+    uint256 msgValue = transaction.srcToken.isETH() ? transaction.srcAmount : 0;
 
-    address[] memory path = new address[](2);
-    path[0] = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
-    path[1] = address(transaction.destToken);
-    uint[] memory minOuts = uniswap.getAmountsOut(transaction.amount, path);
-    _returnAmount = minOuts[1];
+    (IOneInchCaller caller, IOneInchExchange.SwapDescription memory desc, IOneInchCaller.CallDescription[] memory calls) = abi
+      .decode(oneInchCallData[4:], (IOneInchCaller, IOneInchExchange.SwapDescription, IOneInchCaller.CallDescription[]));
 
-    uniswap.swapExactETHForTokens { value: transaction.amount }(
-      minOuts[1],
-      path,
-      transaction.beneficiary,
-      transaction.expiration
-    );
+    _dstReceiver = desc.dstReceiver;
+
+    IOneInchExchange(ONE_INCH_ADDRESS).swap{ value: msgValue }(caller, desc, calls);
+
+    //if (!success) {
+      //revert(RevertReasonParser.parse(result, "OneInchCaller callBytes failed: "));
+    //}
   }
 
   function refund(uint256 transactionId) external {
@@ -91,5 +185,5 @@ contract OneInchMultisigProxy {
     require(transaction.state == State.Pending, "Transaction: Can refund only pending transactions");
   }
 
-  //receive() external payable {}
+  receive() external payable {}
 }
