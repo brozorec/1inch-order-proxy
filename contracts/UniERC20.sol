@@ -3,23 +3,21 @@
 pragma solidity ^0.6.12;
 
 import "@openzeppelin/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
-import "./IERC20Detailed.sol";
 
 library UniERC20 {
   using SafeMath for uint256;
-  using SafeERC20 for IERC20Detailed;
-  using SafeERC20 for IERC20Detailed;
+  using SafeERC20 for IERC20;
 
-  //IERC20 private constant _ETH_ADDRESS = IERC20(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
-  IERC20Detailed private constant _ETH_ADDRESS = IERC20Detailed(0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE);
-  IERC20Detailed private constant _ZERO_ADDRESS = IERC20Detailed(0);
+  IERC20 private constant _ETH_ADDRESS = IERC20(0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE);
+  IERC20 private constant _ZERO_ADDRESS = IERC20(0);
 
-  function isETH(IERC20Detailed token) internal pure returns (bool) {
+  function isETH(IERC20 token) internal pure returns (bool) {
     return (token == _ZERO_ADDRESS || token == _ETH_ADDRESS);
   }
 
-  function uniBalanceOf(IERC20Detailed token, address account) internal view returns (uint256) {
+  function uniBalanceOf(IERC20 token, address account) internal view returns (uint256) {
     if (isETH(token)) {
       return account.balance;
     } else {
@@ -27,7 +25,7 @@ library UniERC20 {
     }
   }
 
-  function uniTransfer(IERC20Detailed token, address payable to, uint256 amount) internal {
+  function uniTransfer(IERC20 token, address payable to, uint256 amount) internal {
     if (amount > 0) {
       if (isETH(token)) {
         to.transfer(amount);
@@ -37,7 +35,7 @@ library UniERC20 {
     }
   }
 
-  function uniApprove(IERC20Detailed token, address to, uint256 amount) internal {
+  function uniApprove(IERC20 token, address to, uint256 amount) internal {
     require(!isETH(token), "Approve called on ETH");
 
     if (amount == 0) {
@@ -50,14 +48,6 @@ library UniERC20 {
         }
         token.safeApprove(to, amount);
       }
-    }
-  }
-
-  function multiplier(IERC20Detailed token) internal view returns (uint256) {
-    if (isETH(token)) {
-      return 1e18;
-    } else {
-      return 10 ** uint256(token.decimals());
     }
   }
 }

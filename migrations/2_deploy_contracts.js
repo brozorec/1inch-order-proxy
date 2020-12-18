@@ -12,7 +12,6 @@ module.exports = async function(deployer) {
   await deployer.link(UniERC20, OneInchMultisigProxy);
   await deployer.deploy(
     OneInchMultisigProxy,
-    addresses.uniswapRouter,
     addresses.priceProvider
   );
 };

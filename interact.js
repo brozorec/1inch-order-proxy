@@ -187,7 +187,7 @@ async function tokenToToken() {
 async function ethToToken() {
   const accounts = await web3.eth.getAccounts();
   const params = {
-    srcToken: eth, dstToken: ERC20, srcAmount: 2, minReturn: 1000, period: 2, user: accounts[0]
+    srcToken: eth, dstToken: ERC20, srcAmount: 2, minReturn: 131862329, period: 2, user: accounts[1]
   };
 
   const { data } = await axios.get('https://api.1inch.exchange/v2.0/swap', {
@@ -195,28 +195,35 @@ async function ethToToken() {
       fromTokenAddress: params.srcToken,
       toTokenAddress: params.dstToken,
       amount: toWei(`${params.srcAmount}`),
+      destReceiver: params.user,
       fromAddress: userAddr,
       slippage: 1
     }
   });
+  //console.log(data);
+  const gasToBe = toBN(data.tx.gasPrice).mul(toBN(data.tx.gas))
+  console.log('Gas to be spent: ' + fromWei(gasToBe));
 
-  const contract = MultisigProxy.address.slice(2).toLowerCase();
-  const replaced = data.tx.data.replace(/2f71129b240080c638ac8d993bff52169e3551c3/g, contract);
-
-  let balBefore = await ERC20Contract.methods.balanceOf(MultisigProxy.address).call();
-  console.log('before:');
-  console.log(balBefore.toString());
-  console.log('======');
+  //let balBefore = await ERC20Contract.methods.balanceOf(params.user).call();
+  //console.log('before:');
+  //console.log(balBefore.toString());
+  //console.log('======');
 
   const { id } = await createETHToTokenTx(params);
   console.log('TX created: ' + id.toString());
 
-  await executeTx({ id, calldata: replaced, fromAccount: accounts[0] }) ;
+  const initBal2 = await web3.eth.getBalance(accounts[2]);
+
+  await executeTx({ id, calldata: data.tx.data, fromAccount: accounts[2] }) ;
   
-  console.log('======');
-  let balAfter = await ERC20Contract.methods.balanceOf(MultisigProxy.address).call();
-  console.log('after:');
-  console.log(balAfter.toString());
+  const afterBal2 = await web3.eth.getBalance(accounts[2]);
+
+  console.log(fromWei(toBN(initBal2).sub(toBN(afterBal2))));
+
+  //console.log('======');
+  //let balAfter = await ERC20Contract.methods.balanceOf(params.user).call();
+  //console.log('after:');
+  //console.log(balAfter.toString());
 }
 
 async function checkDecoding() {
@@ -239,13 +246,15 @@ async function checkDecoding() {
 
   const { id } = await multisigProxy._decode_(data.tx.data);
 
-  const receiver = await multisigProxy._dstReceiver();
-  console.log(receiver);
+  const minReturnAmount = await multisigProxy._minReturnAmount();
+  console.log(minReturnAmount.toString());
+  const guaranteedAmount = await multisigProxy._guaranteedAmount();
+  console.log(guaranteedAmount.toString());
 }
 
 async function main() {
-  //await ethToToken();
-  await tokenToToken();
+  await ethToToken();
+  //await tokenToToken();
   //await checkDecoding();
 }
 

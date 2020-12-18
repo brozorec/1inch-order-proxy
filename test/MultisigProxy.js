@@ -84,8 +84,8 @@ contract('OneInchMultisigProxy', ([user1, user2, user3, _]) => {
     assert.equal(tx.srcToken, srcToken, 'Wrong srcToken');
     assert.equal(tx.dstToken, dstToken, 'Wrong dstToken');
     assert.equal(tx.srcAmount.toString(), toWei(`${srcAmount}`), 'Wrong srcAmount');
-    assert.equal(tx.minDstAmount.toString(), `${minReturn}`, 'Wrong minDstAmount');
-    assert.equal(tx.maxGasAmount.toString(), toWei(`${GAS_AMOUNT}`), 'Wrong maxGasAmount');
+    assert.equal(tx.minReturnAmount.toString(), `${minReturn}`, 'Wrong minReturnAmount');
+    assert.equal(tx.execReward.toString(), toWei(`${GAS_AMOUNT}`), 'Wrong execReward');
     assert.equal(tx.beneficiary, user, 'Wrong beneficiary');
     assert.equal(tx.state.toString(), '0', 'Wrong state');
     const timestamp = await getBlockTimestamp();
