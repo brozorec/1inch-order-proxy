@@ -1,4 +1,4 @@
-const OneInchMultisigProxy = artifacts.require('OneInchMultisigProxy');
+const OneInchOrderProxy = artifacts.require('OneInchOrderProxy');
 const UniERC20 = artifacts.require('UniERC20');
 
 const addresses = {
@@ -10,9 +10,9 @@ const addresses = {
 
 module.exports = async function(deployer) {
   await deployer.deploy(UniERC20);
-  await deployer.link(UniERC20, OneInchMultisigProxy);
+  await deployer.link(UniERC20, OneInchOrderProxy);
   await deployer.deploy(
-    OneInchMultisigProxy,
+    OneInchOrderProxy,
     addresses.oneInchExchange
   );
 };

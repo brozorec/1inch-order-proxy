@@ -1,4 +1,4 @@
-const OneInchMultisigProxy = artifacts.require("OneInchMultisigProxy");
+const OneInchOrderProxy = artifacts.require("OneInchOrderProxy");
 const ERC20ABI = require('./abi/erc20');
 
 const toBN = web3.utils.toBN;
@@ -19,15 +19,15 @@ const ERC20 = dai;
 
 const REWARD_AMOUNT = 0.05;
 
-contract('OneInchMultisigProxy', ([user1, user2, user3, _]) => {
-  let MultisigProxy;
+contract('OneInchOrderProxy', ([user1, user2, user3, _]) => {
+  let OrderProxy;
   let balanceRecord;
   let ERC20Contract = new web3.eth.Contract(ERC20ABI, ERC20);
 
   before(async () => {
-    MultisigProxy = await OneInchMultisigProxy.deployed(); 
+    OrderProxy = await OneInchOrderProxy.deployed(); 
 
-    balanceRecord = toBN(await web3.eth.getBalance(MultisigProxy.address));
+    balanceRecord = toBN(await web3.eth.getBalance(OrderProxy.address));
 
     await ERC20Contract.methods
       .transfer(user1, toWei('100'))
@@ -45,7 +45,7 @@ contract('OneInchMultisigProxy', ([user1, user2, user3, _]) => {
   }
 
   const createETHToTokenTx = async ({ dstToken, srcAmount, minReturn, period, user } = {}) => {
-    const createEvent = await MultisigProxy.create(
+    const createEvent = await OrderProxy.create(
       eth,
       dstToken,
       toBN(toWei(`${srcAmount || 1}`)),
@@ -62,7 +62,7 @@ contract('OneInchMultisigProxy', ([user1, user2, user3, _]) => {
   }
 
   const createTokenToETHTx = async ({ srcToken, srcAmount, minReturn, period, user } = {}) => {
-    const createEvent = await MultisigProxy.create(
+    const createEvent = await OrderProxy.create(
       srcToken,
       eth,
       toBN(toWei(`${srcAmount || 1}`)),
@@ -79,7 +79,7 @@ contract('OneInchMultisigProxy', ([user1, user2, user3, _]) => {
   }
 
   const assertTx = async ({ id, srcToken, dstToken, srcAmount, minReturn, period, user }) => {
-    const tx = await MultisigProxy.orders(id);
+    const tx = await OrderProxy.orders(id);
 
     assert.equal(tx.srcToken, srcToken, 'Wrong srcToken');
     assert.equal(tx.dstToken, dstToken, 'Wrong dstToken');
@@ -102,12 +102,12 @@ contract('OneInchMultisigProxy', ([user1, user2, user3, _]) => {
 
     await assertTx({ id, srcToken: eth, ...params });
 
-    const proxyBalance = await web3.eth.getBalance(MultisigProxy.address);
+    const proxyBalance = await web3.eth.getBalance(OrderProxy.address);
     const toAdd = toBN(toWei(`${params.srcAmount + REWARD_AMOUNT}`));
     assert.equal(
       proxyBalance,
       balanceRecord.add(toAdd).toString(),
-      'MultisigProxy: wrong ETH balance'
+      'OrderProxy: wrong ETH balance'
     );
     balanceRecord = balanceRecord.add(toAdd);
   });
@@ -116,23 +116,23 @@ contract('OneInchMultisigProxy', ([user1, user2, user3, _]) => {
     const params = { srcToken: ERC20, srcAmount: 2, minReturn: 1000, period: 2, user: user1 };
 
     await ERC20Contract.methods
-      .approve(MultisigProxy.address, toWei(`${params.srcAmount}`))
+      .approve(OrderProxy.address, toWei(`${params.srcAmount}`))
       .send({ from: params.user });
 
     const { id } = await createTokenToETHTx(params);
 
     await assertTx({ id, dstToken: eth, ...params });
 
-    const proxyBalance = await web3.eth.getBalance(MultisigProxy.address);
+    const proxyBalance = await web3.eth.getBalance(OrderProxy.address);
     const toAdd = toBN(toWei(`${REWARD_AMOUNT}`));
     assert.equal(
       proxyBalance,
       balanceRecord.add(toAdd).toString(),
-      'MultisigProxy: wrong ETH balance'
+      'OrderProxy: wrong ETH balance'
     );
     balanceRecord = balanceRecord.add(toAdd);
 
-    const erc20Balance = await ERC20Contract.methods.balanceOf(MultisigProxy.address).call();
+    const erc20Balance = await ERC20Contract.methods.balanceOf(OrderProxy.address).call();
     assert.equal(erc20Balance.toString(), toWei(`${params.srcAmount}`));
   });
 });

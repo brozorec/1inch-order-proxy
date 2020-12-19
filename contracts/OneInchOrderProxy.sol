@@ -6,7 +6,7 @@ pragma experimental ABIEncoderV2;
 import "./UniERC20.sol";
 import "./IOneInchExchange.sol";
 
-contract OneInchMultisigProxy {
+contract OneInchOrderProxy {
   using SafeMath for uint256;
   using SafeERC20 for IERC20;
   using UniERC20 for IERC20;
@@ -50,10 +50,10 @@ contract OneInchMultisigProxy {
    * In both cases, one should provide additional ETH in msg.value that
    * would serve as a reward for the one who calls `execute(orderId,calldata)`.
    *
-   * @param srcTokenAddr - address of token to swap from
-   * @param dstTokenAddr - address of token to swap to
-   * @param srcAmount - amount of srcToken in minimal divisible units
-   * @param minReturnAmount - min number of dstToken to be received
+   * @param srcTokenAddr - input ERC20 address
+   * @param dstTokenAddr - target ERC20 address
+   * @param srcAmount - amount of input ERC20 to be swapped (in minimal divisible units)
+   * @param minReturnAmount - min expected amount of target ERC20 (in minimal divisible units)
    * @param period - period in seconds after which order cannot be executed
    */
   function create(

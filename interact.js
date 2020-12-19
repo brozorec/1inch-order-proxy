@@ -1,4 +1,4 @@
-const MultisigProxy = artifacts.require('./OneInchMultisigProxy');
+const OrderProxy = artifacts.require('./OneInchOrderProxy');
 const IERC20 = artifacts.require('./IERC20');
 const axios = require('axios').default;
 
@@ -25,8 +25,8 @@ const REWARD_AMOUNT = 0.05;
 const ERC20Contract = new web3.eth.Contract(IERC20.abi, ERC20);
 
 const createETHToTokenTx = async ({ dstToken, srcAmount, minReturn, period, user } = {}) => {
-  const multisigProxy = await MultisigProxy.deployed();
-  const createEvent = await multisigProxy.create(
+  const orderProxy = await OrderProxy.deployed();
+  const createEvent = await orderProxy.create(
     eth,
     dstToken,
     toBN(toWei(`${srcAmount || 1}`)),
@@ -41,8 +41,8 @@ const createETHToTokenTx = async ({ dstToken, srcAmount, minReturn, period, user
 }
 
 const createTokenToTokenTx = async ({ srcToken, dstToken, srcAmount, minReturn, period, user } = {}) => {
-  const multisigProxy = await MultisigProxy.deployed();
-  const createEvent = await multisigProxy.create(
+  const orderProxy = await OrderProxy.deployed();
+  const createEvent = await orderProxy.create(
     srcToken,
     dstToken,
     toBN("10000000"),
@@ -57,9 +57,9 @@ const createTokenToTokenTx = async ({ srcToken, dstToken, srcAmount, minReturn, 
 }
 
 async function executeTx({ id, calldata, fromAccount }) {
-  const multisigProxy = await MultisigProxy.deployed();
+  const orderProxy = await OrderProxy.deployed();
 
-  await multisigProxy.execute(
+  await orderProxy.execute(
     toBN(`${id}`),
     calldata,
     { from: fromAccount }
@@ -82,7 +82,7 @@ async function tokenToToken() {
   };
   
   const approval = await ERC20Contract.methods
-    .approve(MultisigProxy.address, '10000000')
+    .approve(OrderProxy.address, '10000000')
     .send({ from: accounts[0] });
   console.log(`Approval transaction hash: ${approval.transactionHash}`);
 
@@ -106,9 +106,9 @@ async function tokenToToken() {
     }
   });
   //console.log(data)
-  //console.log(MultisigProxy.address);
+  //console.log(OrderProxy.address);
 
-  //const contract = MultisigProxy.address.slice(2).toLowerCase();
+  //const contract = OrderProxy.address.slice(2).toLowerCase();
   //const replaced = data.tx.data.replace(/2f71129b240080c638ac8d993bff52169e3551c3/g, contract);
 
   await executeTx({ id, calldata: data.tx.data, fromAccount: accounts[0] }) ;
@@ -157,7 +157,7 @@ async function ethToToken() {
 }
 
 async function checkDecoding() {
-  const multisigProxy = await MultisigProxy.deployed();
+  const orderProxy = await OrderProxy.deployed();
   const accounts = await web3.eth.getAccounts();
   const params = {
     srcToken: eth, dstToken: ERC20, srcAmount: 2, minReturn: 1000, period: 2, user: accounts[0]
@@ -174,11 +174,11 @@ async function checkDecoding() {
     }
   });
 
-  const { id } = await multisigProxy._decode_(data.tx.data);
+  const { id } = await orderProxy._decode_(data.tx.data);
 
-  const minReturnAmount = await multisigProxy._minReturnAmount();
+  const minReturnAmount = await orderProxy._minReturnAmount();
   console.log(minReturnAmount.toString());
-  const guaranteedAmount = await multisigProxy._guaranteedAmount();
+  const guaranteedAmount = await orderProxy._guaranteedAmount();
   console.log(guaranteedAmount.toString());
 }
 
