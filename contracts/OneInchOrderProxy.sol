@@ -189,6 +189,13 @@ contract OneInchOrderProxy {
     emit Refund(orderId);
   }
 
+  /**
+   * @dev - Return number of all created orders.
+   */
+  function countOrders() external view returns(uint256) {
+    return orders.length;
+  }
+
   function _decode_(bytes calldata oneInchCallData) external {
     (,IOneInchExchange.SwapDescription memory desc,) = abi
       .decode(oneInchCallData[4:], (IOneInchCaller, IOneInchExchange.SwapDescription, IOneInchCaller.CallDescription[]));
