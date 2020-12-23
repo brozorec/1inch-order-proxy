@@ -32,9 +32,9 @@ contract OneInchOrderProxy {
   event Execute(uint256 indexed id);
   event Refund(uint256 indexed id);
 
-  address public _dstReceiver;
-  uint256 public _guaranteedAmount;
-  uint256 public _minReturnAmount;
+  //address public _dstReceiver;
+  //uint256 public _guaranteedAmount;
+  //uint256 public _minReturnAmount;
 
   constructor(
     address _oneInchAddr
@@ -196,14 +196,14 @@ contract OneInchOrderProxy {
     return orders.length;
   }
 
-  function _decode_(bytes calldata oneInchCallData) external {
-    (,IOneInchExchange.SwapDescription memory desc,) = abi
-      .decode(oneInchCallData[4:], (IOneInchCaller, IOneInchExchange.SwapDescription, IOneInchCaller.CallDescription[]));
+  //function _decode_(bytes calldata oneInchCallData) external {
+    //(,IOneInchExchange.SwapDescription memory desc,) = abi
+      //.decode(oneInchCallData[4:], (IOneInchCaller, IOneInchExchange.SwapDescription, IOneInchCaller.CallDescription[]));
 
-    _dstReceiver = desc.dstReceiver;
-    _guaranteedAmount = desc.guaranteedAmount;
-    _minReturnAmount = desc.minReturnAmount;
-  }
+    //_dstReceiver = desc.dstReceiver;
+    //_guaranteedAmount = desc.guaranteedAmount;
+    //_minReturnAmount = desc.minReturnAmount;
+  //}
 
   receive() external payable {}
 }
