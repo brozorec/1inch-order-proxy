@@ -1,7 +1,7 @@
 # 1inch-order-proxy
-With **1InchOrderProxy** one can register an order to swap between ERC20 tokens which is to be executed on [1Inch](https://1inch.exchange/) when certain predefined conditions are met.. It's based on [version 2](https://github.com/1inch-exchange/1inch-v2-contracts) of 1Inch Protocol.
+With **1InchOrderProxy** one can register an order to swap between ERC20 tokens which is to be executed on [1Inch](https://1inch.exchange/) when certain predefined conditions are met. It's based on [version 2](https://github.com/1inch-exchange/1inch-v2-contracts) of 1Inch Protocol.
 
-Its primary use case is for multisig accounts when all required members cannot confirm a given transaction at the same moment. This requires more coordination efforts and sometimes results in much higher slippage due to price changes or even in failed transactions, missed trading opportunities and unnecessary gas costs.
+Its primary use case is for multisig accounts when all required members cannot confirm a given transaction at the same moment. This requires some coordination efforts and sometimes results in much higher slippage due to price changes or even in failed transactions, missed trading opportunities and unnecessary gas costs.
 
 The idea behind this project is to avoid most of these inconveniences by intermediating the interactions between the multisig and 1Inch. Multisig sends to **1InchOrderProxy** the resources it wants to swap and defines a minimum required return amount, accompanied by a small amount of ETH that will cover gas costs of order’s execution. Once registered on 1InchOrderProxy, everyone can trigger the execution of the order on 1Inch and they get compensated by the provided additional ETH. At any moment before execution, multisig can ask for a refund of all sent resources.
 
