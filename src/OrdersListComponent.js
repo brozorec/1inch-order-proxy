@@ -125,7 +125,7 @@ const OrdersListComponent = ({ account }) => {
         ? <Loader active content='Loading' />
         : noOrders
         ? (
-          <Segment>No active orders to execute</Segment>
+          <Segment textAlign='center'>No pending orders to execute</Segment>
         )
         : (
           <Card.Group itemsPerRow={3} stackable>
