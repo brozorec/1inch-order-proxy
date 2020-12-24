@@ -39,9 +39,7 @@ const App = () => {
       {header()}
       <Container style={{ paddingTop: '20px' }}>
         <h3>Pending orders from 1InchOrderProxy</h3>
-        <p>Execute orders on 1Inch and get compensated for gas costs.Check
-          <a href='https://github.com/brozorec/1inch-order-proxy' target='_blank' rel="noopener noreferrer">here</a>
-          for more info.</p>
+        <p>Execute orders on 1Inch and get compensated for gas costs. Check <a href='https://github.com/brozorec/1inch-order-proxy' target='_blank' rel="noopener noreferrer">here</a> for more info.</p>
       </Container>
       <Container>
         <OrdersListComponent account={wallet.account}/>
