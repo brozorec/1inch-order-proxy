@@ -45,3 +45,6 @@ Parameters for `execute()`:
 2. An integration for [Gnosis safe](https://gnosis-safe.io) built with https://github.com/gnosis/safe-apps-sdk/ where multisig can create an order. In order to use it, go your Gnosis Safe -> Apps -> Add custom app and type `https://gnosis-1inch-order-proxy.herokuapp.com`.
 
 3. A front-end client that lists all pending orders and allows to execute them by internalising calls to `https://api.1inch.exchange/v2.0/swap`. It's available [here](https://pool-1inch-order-proxy.herokuapp.com).
+
+
+![Multisig Order Swap](https://github.com/brozorec/1inch-order-proxy/blob/develop/process-scheme.png)
