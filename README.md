@@ -5,7 +5,7 @@ Its primary use case is for multisig accounts when all required members cannot c
 
 The idea behind this project is to avoid most of these inconveniences by intermediating the interactions between the multisig and 1Inch. Multisig sends to **1InchOrderProxy** the resources it wants to swap and defines a minimum required return amount, accompanied by a small amount of ETH that will cover gas costs of order’s execution. Once registered on 1InchOrderProxy, everyone can trigger the execution of the order on 1Inch and they get compensated by the provided additional ETH. At any moment before execution, multisig can ask for a refund of all sent resources.
 
-- [Project's ideo presentation](https://youtu.be/XIbF8x4pGJU)
+- [Project's video presentation](https://youtu.be/XIbF8x4pGJU)
 
 ## How it works
 
